@@ -1,0 +1,3 @@
+#!/bin/bash
+
+../source/test_dict dog 77. | tee output.dat
