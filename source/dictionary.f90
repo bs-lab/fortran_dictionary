@@ -1,6 +1,9 @@
 MODULE DICTIONARY_MOD
   IMPLICIT NONE
 
+  PRIVATE
+  PUBLIC hash_size, mkl, Dict, PrintDict
+
   INTEGER, PARAMETER :: hash_size=101
   INTEGER, PARAMETER :: mkl=64         ! max key length
   INTEGER, PARAMETER :: mll=32         ! max size of linked lists
@@ -9,46 +12,19 @@ MODULE DICTIONARY_MOD
     CHARACTER(LEN=mkl), DIMENSION(hash_size, mll) :: Keys
     DOUBLE PRECISION, DIMENSION(hash_size, mll) :: Values
     INTEGER, DIMENSION(hash_size) :: used
+  CONTAINS
+    PROCEDURE :: initialize
+    PROCEDURE :: get_keys
+    PROCEDURE :: value => GetValue
+    PROCEDURE :: add => AddToDict
   END TYPE Dict
 
 CONTAINS
 
-  SUBROUTINE InitializeDict(MyDict)
-    TYPE(Dict) :: MyDict
-    INTEGER :: i
-    DO i = 1, hash_size
-      MyDict%Keys(i,:) = ""
-      MyDict%Values(i,:) = TINY(0d0)
-      MyDict%used(i) = 0
-    END DO
-  END SUBROUTINE InitializeDict
-
-
-  PURE FUNCTION GetKeys(MyDict) RESULT(keys)
-    TYPE(Dict), INTENT(IN) :: MyDict
-    CHARACTER(LEN=mkl), DIMENSION(:), ALLOCATABLE :: keys, keys_sparse
-    INTEGER :: i, j, c
-
-    c = 0
-    ALLOCATE(keys_sparse(hash_size*mll))
-    DO i = 1, hash_size
-      DO j = 1, MyDict%used(i)
-        IF (MyDIct%Keys(i,j) /= "") THEN
-          c = c + 1
-          keys_sparse(c) = MyDict%Keys(i,j)
-        END IF
-      END DO
-    END DO
-    ALLOCATE(keys(c))
-    keys(1:c) = keys_sparse(1:c)
-    DEALLOCATE(keys_sparse)
-
-  END FUNCTION GetKeys
-
-
   SUBROUTINE PrintDict(MyDict)
     TYPE(Dict), INTENT(IN) :: MyDict
     INTEGER :: i, j
+
     DO i = 1, hash_size
       DO j = 1, MyDict%used(i)
         IF (MyDIct%Keys(i,j) /= "") THEN
@@ -56,9 +32,11 @@ CONTAINS
         END IF
       END DO
     END DO
+
   END SUBROUTINE PrintDict
 
 
+  ! ------------------------------------------------------------------------------------------------
   PURE FUNCTION GetHash(string_key) RESULT(hash)
     CHARACTER(LEN=*), INTENT(IN) :: string_key
     INTEGER :: hash, c
@@ -72,24 +50,7 @@ CONTAINS
   END FUNCTION GetHash
 
 
-  FUNCTION GetValue(MyDict, xKey) RESULT(xValue)
-    TYPE(Dict), INTENT(IN) :: MyDict
-    CHARACTER(LEN=*), INTENT(IN) :: xKey
-    DOUBLE PRECISION :: xValue
-    INTEGER :: hash, indx 
-
-    hash = GetHash(xKey)
-    indx = DoesKeyExist(MyDict, hash, xKey)
-    IF (indx == 0) THEN
-      WRITE(0,*)"ERROR: Requested key '" // TRIM(xKey) // "' is not in dict."
-      WRITE(0,'(I10)') "traceback"
-      STOP
-    END IF
-    xValue = MyDict%Values(hash, indx)
-
-  END FUNCTION GetValue
-
-
+  ! ------------------------------------------------------------------------------------------------
   PURE FUNCTION DoesKeyExist(MyDict, hash, xKey) RESULT(indx)
     ! returns '0' if key does not exist in dictionary, otherwise
     !   returns the index of the key in the linked list
@@ -107,11 +68,69 @@ CONTAINS
         EXIT
       END IF
     END DO
+
   END FUNCTION DoesKeyExist
 
 
+  ! ------------------------------------------------------------------------------------------------
+  SUBROUTINE initialize(MyDict)
+    CLASS(Dict) :: MyDict
+    INTEGER :: i
+
+    DO i = 1, hash_size
+      MyDict%Keys(i,:) = ""
+      MyDict%Values(i,:) = TINY(0d0)
+      MyDict%used(i) = 0
+    END DO
+
+  END SUBROUTINE initialize
+
+
+  ! ------------------------------------------------------------------------------------------------
+  PURE FUNCTION get_keys(MyDict) RESULT(keys)
+    CLASS(Dict), INTENT(IN) :: MyDict
+    CHARACTER(LEN=mkl), DIMENSION(:), ALLOCATABLE :: keys, keys_sparse
+    INTEGER :: i, j, c
+
+    c = 0
+    ALLOCATE(keys_sparse(hash_size*mll))
+    DO i = 1, hash_size
+      DO j = 1, MyDict%used(i)
+        IF (MyDIct%Keys(i,j) /= "") THEN
+          c = c + 1
+          keys_sparse(c) = MyDict%Keys(i,j)
+        END IF
+      END DO
+    END DO
+    ALLOCATE(keys(c))
+    keys(1:c) = keys_sparse(1:c)
+    DEALLOCATE(keys_sparse)
+
+  END FUNCTION get_keys
+
+
+  ! ------------------------------------------------------------------------------------------------
+  FUNCTION GetValue(MyDict, xKey) RESULT(xValue)
+    CLASS(Dict), INTENT(IN) :: MyDict
+    CHARACTER(LEN=*), INTENT(IN) :: xKey
+    DOUBLE PRECISION :: xValue
+    INTEGER :: hash, indx 
+
+    hash = GetHash(xKey)
+    indx = DoesKeyExist(MyDict, hash, xKey)
+    IF (indx == 0) THEN
+      WRITE(0,*)"ERROR: Requested key '" // TRIM(xKey) // "' is not in dict."
+      WRITE(0,'(I10)') "traceback"
+      STOP
+    END IF
+    xValue = MyDict%Values(hash, indx)
+
+  END FUNCTION GetValue
+
+
+  ! ------------------------------------------------------------------------------------------------
   SUBROUTINE AddToDict(MyDict, xKey, xValue)
-    TYPE(Dict), INTENT(INOUT) :: MyDict
+    CLASS(Dict), INTENT(INOUT) :: MyDict
     CHARACTER(LEN=*), INTENT(IN) :: xKey
     DOUBLE PRECISION, INTENT(IN) :: xValue
     INTEGER :: hash, indx
