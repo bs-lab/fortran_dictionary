@@ -1,4 +1,7 @@
 #!/bin/bash
 
-gfortran -fbacktrace -Wall -ffree-line-length-none -fdump-core -C -Warray-bounds \
-  ./dictionary.f90 ./main.f90 -o test_dict
+gfortran -g -p -fbacktrace -Wall -ffree-line-length-none -fdump-core -C -Warray-bounds \
+  ./dictionary.f90 ./test_small.f90 -o test_small
+
+gfortran -g -p -fbacktrace -Wall -ffree-line-length-none -fdump-core -C -Warray-bounds \
+  ./dictionary.f90 ./test_large.f90 -o test_large

@@ -1,3 +1,14 @@
 #!/bin/bash
 
-../source/test_dict dog 77. | tee output.dat
+time ../source/test_small dog 77. | tee output_small.dat
+gprof ../source/test_small gmon.out > prof_results_small.out
+rm gmon.out
+
+
+
+#head -42100 words.txt > words_tmp.txt
+time ../source/test_large words.txt output_large.dat
+#rm words_tmp.txt
+
+gprof ../source/test_large gmon.out > prof_results_large.out
+rm gmon.out

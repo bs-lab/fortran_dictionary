@@ -2,32 +2,45 @@ MODULE DICTIONARY_MOD
   IMPLICIT NONE
 
   PRIVATE
-  PUBLIC mkl, mlv, Dict
+  PUBLIC mkl, mlv, Dict, PrintSummary
 
   INTEGER, PARAMETER :: dp=KIND(1d0)
 
-  INTEGER, PARAMETER :: hash_size=101
+  ! hash_size of 4001 and mll of 256 works well for the "words.txt" test case
+  INTEGER, PARAMETER :: hash_size=4001
   INTEGER, PARAMETER :: mkl=64         ! max key length
-  INTEGER, PARAMETER :: mll=32         ! max size of linked lists
+  INTEGER, PARAMETER :: mll=256        ! max size of linked lists
+  !INTEGER, PARAMETER :: mll=64         ! max size of linked lists
   INTEGER, PARAMETER :: mlv=4096       ! max length of dictionary value (for char array values)
 
   TYPE Dict
     CHARACTER(LEN=mkl), DIMENSION(hash_size, mll) :: Keys
-    INTEGER, DIMENSION(hash_size, mll) :: Values_int
-    REAL(dp), DIMENSION(hash_size, mll) :: Values_dble
-    CHARACTER(LEN=mlv), DIMENSION(hash_size, mll) :: Values_char
+    INTEGER, DIMENSION(:, :), ALLOCATABLE :: Values_int
+    REAL(dp), DIMENSION(:, :), ALLOCATABLE :: Values_dble
+    CHARACTER(LEN=mlv), DIMENSION(:, :), ALLOCATABLE :: Values_char
     INTEGER, DIMENSION(hash_size) :: used
     INTEGER :: vtype   ! 0: undefined;  1: integer;  2: double precision;  3: char array
   CONTAINS
     PROCEDURE :: print => PrintDict
     PROCEDURE :: initialize
+    PROCEDURE :: free => FreeDict
     PROCEDURE :: get_keys
     PROCEDURE :: value => GetValue
     PROCEDURE :: add => AddToDict
   END TYPE Dict
 
 CONTAINS
+  SUBROUTINE PrintSummary(MyDict, fid)
+    CLASS(Dict), INTENT(IN) :: MyDict 
+    INTEGER, INTENT(IN) :: fid
+    INTEGER :: i
+    DO i = 1, hash_size
+      WRITE(fid, *) i, MyDIct%used(i)
+    END DO
+  END SUBROUTINE PrintSummary
 
+
+  ! ------------------------------------------------------------------------------------------------
   SUBROUTINE PrintDict(MyDict, fid_arg)
     CLASS(Dict), INTENT(IN) :: MyDict
     INTEGER, OPTIONAL :: fid_arg
@@ -70,14 +83,21 @@ CONTAINS
 
   ! ------------------------------------------------------------------------------------------------
   PURE FUNCTION GetHash(string_key) RESULT(hash)
+    INTEGER, PARAMETER :: ncs=4   ! number of characters to convert to a long integer at a time
     CHARACTER(LEN=*), INTENT(IN) :: string_key
     INTEGER :: hash, c
+    INTEGER(8) :: mul, isum
 
-    hash = 0
+    isum = 0
     DO c = 1, LEN_TRIM(string_key)
-      hash = hash + ICHAR(string_key(c:c))
+      IF (MODULO(c,ncs) == 1) THEN
+        mul = 1
+      ELSE
+        mul = mul * 256
+      END IF
+      isum = isum + ICHAR(string_key(c:c)) * mul
     END DO
-    hash = MODULO(hash, hash_size)
+    hash = INT(MODULO(isum, hash_size) + 1)
 
   END FUNCTION GetHash
 
@@ -94,9 +114,9 @@ CONTAINS
     indx = 0
     DO u = 1, MyDict%used(hash)
       IF (xKey == MyDict%Keys(hash, u)) THEN
+        !write(0,*) "going to overwrite at u=", u
         ! key already exists, so will overwrite its existing corresponding value
         indx = u
-        !write(0,*) "going to overwrite at u=", u
         EXIT
       END IF
     END DO
@@ -113,22 +133,40 @@ CONTAINS
     SELECT TYPE(kind_val)
     TYPE IS (integer)
         MyDict%vtype = 1
+        ALLOCATE(MyDict%Values_int(hash_size, mll))
+        !MyDict%Values_int(:,:) = 0
       TYPE IS (real(8))
         MyDict%vtype = 2
+        ALLOCATE(MyDict%Values_dble(hash_size, mll))
+        MyDict%Values_dble(:,:) = TINY(0d0)
       TYPE IS (character(len=*))
         MyDict%vtype = 3
+        ALLOCATE(MyDict%Values_char(hash_size, mll))
+        !MyDict%Values_char(:,:) = ""
       CLASS DEFAULT
         MyDict%vtype = 0
     END SELECT
 
     DO i = 1, hash_size
       MyDict%Keys(i,:) = ""
-      MyDict%Values_dble(i,:) = TINY(0d0)
-      MyDict%Values_int(i,:) = 0
       MyDict%used(i) = 0
     END DO
 
   END SUBROUTINE initialize
+
+
+  ! ------------------------------------------------------------------------------------------------
+  SUBROUTINE FreeDict(MyDict)
+    CLASS(Dict) :: MyDict
+      IF (MyDict%vtype == 1) THEN
+        DEALLOCATE(MyDict%Values_int)
+      ELSEIF (MyDict%vtype == 2) THEN
+        DEALLOCATE(MyDict%Values_dble)
+      ELSEIF (MyDict%vtype == 3) THEN
+        DEALLOCATE(MyDict%Values_char)
+      END IF
+     
+  END SUBROUTINE FreeDict
 
 
   ! ------------------------------------------------------------------------------------------------
@@ -141,7 +179,7 @@ CONTAINS
     ALLOCATE(keys_sparse(hash_size*mll))
     DO i = 1, hash_size
       DO j = 1, MyDict%used(i)
-        IF (MyDIct%Keys(i,j) /= "") THEN
+        IF (MyDict%Keys(i,j) /= "") THEN
           c = c + 1
           keys_sparse(c) = MyDict%Keys(i,j)
         END IF
