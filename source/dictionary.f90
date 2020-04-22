@@ -1,281 +1,281 @@
-MODULE DICTIONARY_MOD
-  IMPLICIT NONE
+module dictionary_mod
+  implicit none
 
-  PRIVATE
-  PUBLIC mkl, mlv, Dict, PrintSummary
+  private
+  public mkl, mlv, Dict, PrintSummary
 
-  INTEGER, PARAMETER :: dp=KIND(1d0)
+  integer, parameter :: dp=kind(1d0)
 
   ! hash_size of 4001 and mll of 256 works well for the "words.txt" test case
-  INTEGER, PARAMETER :: hash_size=4001
-  INTEGER, PARAMETER :: mkl=64         ! max key length
-  INTEGER, PARAMETER :: mll=256        ! max size of linked lists
-  !INTEGER, PARAMETER :: mll=64         ! max size of linked lists
-  INTEGER, PARAMETER :: mlv=4096       ! max length of dictionary value (for char array values)
+  integer, parameter :: hash_size=4001
+  integer, parameter :: mkl=64         ! max key length
+  integer, parameter :: mll=256        ! max size of linked lists
+  integer, parameter :: mlv=4096       ! max length of dictionary value (for char array values)
 
-  TYPE Dict
-    CHARACTER(LEN=mkl), DIMENSION(hash_size, mll) :: Keys
-    INTEGER, DIMENSION(:, :), ALLOCATABLE :: Values_int
-    REAL(dp), DIMENSION(:, :), ALLOCATABLE :: Values_dble
-    CHARACTER(LEN=mlv), DIMENSION(:, :), ALLOCATABLE :: Values_char
-    INTEGER, DIMENSION(hash_size) :: used
-    INTEGER :: vtype   ! 0: undefined;  1: integer;  2: double precision;  3: char array
-  CONTAINS
-    PROCEDURE :: print => PrintDict
-    PROCEDURE :: initialize
-    PROCEDURE :: free => FreeDict
-    PROCEDURE :: get_keys
-    PROCEDURE :: value => GetValue
-    PROCEDURE :: add => AddToDict
-  END TYPE Dict
+  type Dict
+    character(len=mkl), dimension(hash_size, mll) :: Keys
+    integer, dimension(:, :), allocatable :: Values_int
+    real(dp), dimension(:, :), allocatable :: Values_dble
+    character(len=mlv), dimension(:, :), allocatable :: Values_char
+    integer, dimension(hash_size) :: used
+    integer :: vtype   ! 0: undefined;  1: integer;  2: double precision;  3: char array
+  contains
+    procedure :: print => PrintDict
+    procedure :: initialize
+    procedure :: free => FreeDict
+    procedure :: get_keys
+    procedure :: value => GetValue
+    procedure :: add => AddToDict
+  end type Dict
 
-CONTAINS
-  SUBROUTINE PrintSummary(MyDict, fid)
-    CLASS(Dict), INTENT(IN) :: MyDict 
-    INTEGER, INTENT(IN) :: fid
-    INTEGER :: i
-    DO i = 1, hash_size
-      WRITE(fid, *) i, MyDIct%used(i)
-    END DO
-  END SUBROUTINE PrintSummary
+contains
+  subroutine PrintSummary(MyDict, fid)
+    class(Dict), intent(in) :: MyDict 
+    integer, intent(in) :: fid
+    integer :: i
+    do i = 1, hash_size
+      write(fid, *) i, MyDict%used(i)
+    end do
+  end subroutine PrintSummary
 
 
   ! ------------------------------------------------------------------------------------------------
-  SUBROUTINE PrintDict(MyDict, fid_arg)
-    CLASS(Dict), INTENT(IN) :: MyDict
-    INTEGER, OPTIONAL :: fid_arg
-    INTEGER :: i, j, fid
+  subroutine PrintDict(MyDict, fid_arg)
+    class(Dict), intent(in) :: MyDict
+    integer, optional :: fid_arg
+    integer :: i, j, fid
 
-    IF (PRESENT(fid_arg)) THEN
+    if (present(fid_arg)) then
       fid = fid_arg
-    ELSE
+    else
       fid = 6
-    END IF
+    end if
 
-    IF (MyDict%vtype == 1) THEN
-      DO i = 1, hash_size
-        DO j = 1, MyDict%used(i)
-          IF (MyDict%Keys(i,j) /= "") THEN
-            WRITE(fid,*) TRIM(MyDict%Keys(i,j)), " :", MyDict%Values_int(i,j)
-          END IF
-        END DO
-      END DO
-    ELSEIF (MyDict%vtype == 2) THEN
-      DO i = 1, hash_size
-        DO j = 1, MyDict%used(i)
-          IF (MyDict%Keys(i,j) /= "") THEN
-            WRITE(fid,*) TRIM(MyDict%Keys(i,j)), " :", MyDict%Values_dble(i,j)
-          END IF
-        END DO
-      END DO
-    ELSEIF (MydIct%vtype == 3) THEN
-      DO i = 1, hash_size
-        DO j = 1, MyDict%used(i)
-          IF (MyDict%Keys(i,j) /= "") THEN
-            WRITE(fid,*) TRIM(MyDict%Keys(i,j)), " :", TRIM(MyDict%Values_char(i,j))
-          END IF
-        END DO
-      END DO
-    END IF
+    if (MyDict%vtype == 1) then
+      do i = 1, hash_size
+        do j = 1, MyDict%used(i)
+          if (MyDict%Keys(i,j) /= "") then
+            write(fid,*) trim(MyDict%Keys(i,j)), " :", MyDict%Values_int(i,j)
+          end if
+        end do
+      end do
+    elseif (MyDict%vtype == 2) then
+      do i = 1, hash_size
+        do j = 1, MyDict%used(i)
+          if (MyDict%Keys(i,j) /= "") then
+            write(fid,*) trim(MyDict%Keys(i,j)), " :", MyDict%Values_dble(i,j)
+          end if
+        end do
+      end do
+    elseif (MydIct%vtype == 3) then
+      do i = 1, hash_size
+        do j = 1, MyDict%used(i)
+          if (MyDict%Keys(i,j) /= "") then
+            write(fid,*) trim(MyDict%Keys(i,j)), " :", trim(MyDict%Values_char(i,j))
+          end if
+        end do
+      end do
+    end if
 
-  END SUBROUTINE PrintDict
+  end subroutine PrintDict
 
 
   ! ------------------------------------------------------------------------------------------------
-  PURE FUNCTION GetHash(string_key) RESULT(hash)
-    INTEGER, PARAMETER :: ncs=4   ! number of characters to convert to a long integer at a time
-    CHARACTER(LEN=*), INTENT(IN) :: string_key
-    INTEGER :: hash, c
-    INTEGER(8) :: mul, isum
+  pure function GetHash(string_key) result(hash)
+    integer, parameter :: ncs=4   ! number of characters to convert to a long integer at a time
+    character(len=*), intent(in) :: string_key
+    integer :: hash, c
+    integer(8) :: mul, isum
 
     isum = 0
-    DO c = 1, LEN_TRIM(string_key)
-      IF (MODULO(c,ncs) == 1) THEN
+    do c = 1, len_trim(string_key)
+      if (modulo(c,ncs) == 1) then
         mul = 1
-      ELSE
+      else
         mul = mul * 256
-      END IF
-      isum = isum + ICHAR(string_key(c:c)) * mul
-    END DO
-    hash = INT(MODULO(isum, hash_size) + 1)
+      end if
+      isum = isum + ichar(string_key(c:c)) * mul
+    end do
+    hash = int(modulo(isum, hash_size) + 1)
 
-  END FUNCTION GetHash
+  end function GetHash
 
 
   ! ------------------------------------------------------------------------------------------------
-  PURE FUNCTION DoesKeyExist(MyDict, hash, xKey) RESULT(indx)
-    ! returns '0' if key does not exist in dictionary, otherwise
+  pure function DoesKeyExist(MyDict, hash, xKey) result(indx)
+    ! returns 0 if key does not exist in dictionary, otherwise
     !   returns the index of the key in the linked list
-    TYPE(Dict), INTENT(IN) :: MyDict
-    CHARACTER(LEN=*), INTENT(IN) :: xKey
-    INTEGER, INTENT(IN) :: hash
-    INTEGER ::  u, indx
+    type(Dict), intent(in) :: MyDict
+    character(len=*), intent(in) :: xKey
+    integer, intent(in) :: hash
+    integer ::  u, indx
 
     indx = 0
-    DO u = 1, MyDict%used(hash)
-      IF (xKey == MyDict%Keys(hash, u)) THEN
+    do u = 1, MyDict%used(hash)
+      if (xKey == MyDict%Keys(hash, u)) then
         !write(0,*) "going to overwrite at u=", u
         ! key already exists, so will overwrite its existing corresponding value
         indx = u
-        EXIT
-      END IF
-    END DO
+        exit
+      end if
+    end do
 
-  END FUNCTION DoesKeyExist
+  end function DoesKeyExist
 
 
   ! ------------------------------------------------------------------------------------------------
-  SUBROUTINE initialize(MyDict, kind_val)
-    CLASS(Dict) :: MyDict
-    CLASS(*) :: kind_val
-    INTEGER :: i
+  subroutine initialize(MyDict, kind_val)
+    class(Dict) :: MyDict
+    class(*) :: kind_val
+    integer :: i
 
-    SELECT TYPE(kind_val)
-    TYPE IS (integer)
+    select type(kind_val)
+    type is (integer)
         MyDict%vtype = 1
-        ALLOCATE(MyDict%Values_int(hash_size, mll))
+        allocate(MyDict%Values_int(hash_size, mll))
         !MyDict%Values_int(:,:) = 0
-      TYPE IS (real(8))
+      type is (real(8))
         MyDict%vtype = 2
-        ALLOCATE(MyDict%Values_dble(hash_size, mll))
-        MyDict%Values_dble(:,:) = TINY(0d0)
-      TYPE IS (character(len=*))
+        allocate(MyDict%Values_dble(hash_size, mll))
+        MyDict%Values_dble(:,:) = tiny(0d0)
+      type is (character(len=*))
         MyDict%vtype = 3
-        ALLOCATE(MyDict%Values_char(hash_size, mll))
+        allocate(MyDict%Values_char(hash_size, mll))
         !MyDict%Values_char(:,:) = ""
-      CLASS DEFAULT
+      class default
         MyDict%vtype = 0
-    END SELECT
+    end select
 
-    DO i = 1, hash_size
+    do i = 1, hash_size
       MyDict%Keys(i,:) = ""
       MyDict%used(i) = 0
-    END DO
+    end do
 
-  END SUBROUTINE initialize
+  end subroutine initialize
 
 
   ! ------------------------------------------------------------------------------------------------
-  SUBROUTINE FreeDict(MyDict)
-    CLASS(Dict) :: MyDict
-      IF (MyDict%vtype == 1) THEN
-        DEALLOCATE(MyDict%Values_int)
-      ELSEIF (MyDict%vtype == 2) THEN
-        DEALLOCATE(MyDict%Values_dble)
-      ELSEIF (MyDict%vtype == 3) THEN
-        DEALLOCATE(MyDict%Values_char)
-      END IF
+  subroutine FreeDict(MyDict)
+    class(Dict) :: MyDict
+      if (MyDict%vtype == 1) then
+        deallocate(MyDict%Values_int)
+      elseif (MyDict%vtype == 2) then
+        deallocate(MyDict%Values_dble)
+      elseif (MyDict%vtype == 3) then
+        deallocate(MyDict%Values_char)
+      end iF
      
-  END SUBROUTINE FreeDict
+  end subroutine FreeDict
 
 
   ! ------------------------------------------------------------------------------------------------
-  PURE FUNCTION get_keys(MyDict) RESULT(keys)
-    CLASS(Dict), INTENT(IN) :: MyDict
-    CHARACTER(LEN=mkl), DIMENSION(:), ALLOCATABLE :: keys, keys_sparse
-    INTEGER :: i, j, c
+  pure function get_keys(MyDict) result(keys)
+    class(Dict), intent(in) :: MyDict
+    character(len=mkl), dimension(:), allocatable :: keys, keys_sparse
+    integer :: i, j, c
 
     c = 0
-    ALLOCATE(keys_sparse(hash_size*mll))
-    DO i = 1, hash_size
-      DO j = 1, MyDict%used(i)
-        IF (MyDict%Keys(i,j) /= "") THEN
+    allocate(keys_sparse(hash_size*mll))
+    do i = 1, hash_size
+      do j = 1, MyDict%used(i)
+        if (MyDict%Keys(i,j) /= "") then
           c = c + 1
           keys_sparse(c) = MyDict%Keys(i,j)
-        END IF
-      END DO
-    END DO
-    ALLOCATE(keys(c))
+        end if
+      end do
+    end do
+    allocate(keys(c))
     keys(1:c) = keys_sparse(1:c)
-    DEALLOCATE(keys_sparse)
+    deallocate(keys_sparse)
 
-  END FUNCTION get_keys
+  end function get_keys
 
 
   ! ------------------------------------------------------------------------------------------------
-  SUBROUTINE GetValue(MyDict, xKey, xValue)
-    CLASS(Dict), INTENT(IN) :: MyDict
-    CLASS(*) :: xValue
-    CHARACTER(LEN=*), INTENT(IN) :: xKey
-    INTEGER :: hash, indx 
+  subroutine GetValue(MyDict, xKey, xValue)
+    class(Dict), intent(in) :: MyDict
+    class(*) :: xValue
+    character(len=*), intent(in) :: xKey
+    integer :: hash, indx 
 
     hash = GetHash(xKey)
     indx = DoesKeyExist(MyDict, hash, xKey)
-    IF (indx == 0) THEN
-      WRITE(0,*)"ERROR: Requested key '" // TRIM(xKey) // "' is not in dict."
-      WRITE(0,'(I10)') "traceback"
-      STOP
-    END IF
-    SELECT TYPE(xValue)
-      TYPE IS (integer)
-        xValue = MyDict%Values_int(hash, indx)
-      TYPE IS (real(dp))
-        xValue = MyDict%Values_dble(hash, indx)
-      TYPE IS (character(len=*))
-        xValue = MyDict%Values_char(hash, indx)
-      CLASS DEFAULT
-    END SELECT
+    if (indx == 0) then
+      write(0,*)"ERROR: Requested key '" // trim(xKey) // "' is not in dict."
+      write(0,'(I10)') "traceback"
+      stop
+    end if
 
-  END SUBROUTINE GetValue
+    select typE(xValue)
+      type is (integer)
+        xValue = MyDict%Values_int(hash, indx)
+      type is (real(dp))
+        xValue = MyDict%Values_dble(hash, indx)
+      type is (character(len=*))
+        xValue = MyDict%Values_char(hash, indx)
+      class default
+    end select
+
+  end subroutine GetValue
 
 
   ! ------------------------------------------------------------------------------------------------
-  SUBROUTINE AddToDict(MyDict, xKey, xValue)
-    CLASS(Dict), INTENT(INOUT) :: MyDict
-    CLASS(*), INTENT(IN) :: xValue
-    CHARACTER(LEN=*), INTENT(IN) :: xKey
-    INTEGER :: hash, indx, xValue_int
-    CHARACTER(LEN=mlv) :: xValue_char
-    REAL(dp) :: xValue_dble
+  subroutine AddToDict(MyDict, xKey, xValue)
+    class(Dict), intent(inout) :: MyDict
+    class(*), intent(in) :: xValue
+    character(len=*), intent(in) :: xKey
+    integer :: hash, indx, xValue_int
+    character(len=mlv) :: xValue_char
+    real(dp) :: xValue_dble
 
-    SELECT TYPE(xValue)
-      TYPE IS (integer)
+    select type(xValue)
+      type is (integer)
         xValue_int = xValue
-      TYPE IS (real(dp))
+      type is (real(dp))
         xValue_dble = xValue
-      TYPE IS (character(len=*))
+      type is (character(len=*))
         xValue_char = xValue
-      CLASS DEFAULT
-    END SELECT
+      class default
+    end select
 
     hash = GetHash(xKey)
 
     ! check if xKey is already in MyDict
-    IF (MyDict%used(hash) == 0) THEN
+    if (MyDict%used(hash) == 0) then
       ! no collision, so key does not already exist in dictionary
       MyDict%used(hash) = 1
       !write(0,*)"no collision"
       indx = 1
-    ELSE
+    else
       ! collision, so key may or may not already exist in dictionary
       !write(0,*)"collision!"
       indx = DoesKeyExist(MyDict, hash, xKey)
-      IF (indx == 0) THEN
+      if (indx == 0) then
         ! collision, but not from the same key, just coincidence
-        IF (MyDict%used(hash) == mll) THEN
-          WRITE(0,*)"ERROR: Too many collisions.  Recompile with larger 'mll' or 'hash_size' " // &
+        if (MyDict%used(hash) == mll) then
+          write(0,*)"ERROR: Too many collisions.  Recompile with larger 'mll' or 'hash_size' " // &
                     "parameter or alter the hash function."
-          WRITE(0,'(I10)') "traceback"
-          STOP
-        END IF
+          write(0,'(I10)') "traceback"
+          stop
+        end if
         MyDict%used(hash) = MyDict%used(hash)+1
         indx = MyDict%used(hash)
-      !ELSE
+      !else
         ! collision because key already existed, so overwrite key's value
         !MyDict%used(hash) = indx 
-      END IF
-    END IF
+      end if
+    end if
 
     !write(0,*)"used, key, value:", MyDict%used(hash), indx, xKey, xValue
     MyDict%Keys(hash, indx) = xKey
-    IF (MyDict%vtype == 1) THEN
+    if (MyDict%vtype == 1) then
       MyDict%Values_int(hash, indx) = xValue_int
-    ELSEIF (MyDict%vtype == 2) THEN
+    elseif (MyDict%vtype == 2) then
       MyDict%Values_dble(hash, indx) = xValue_dble
-    ELSEIF (MyDict%vtype == 3) THEN
+    elseif (MyDict%vtype == 3) then
       MyDict%Values_char(hash, indx) = xValue_char
-    END IF
+    end if
 
-  END SUBROUTINE AddToDict
+  end subroutine AddToDict
 
-END MODULE DICTIONARY_MOD
+end module dictionary_mod

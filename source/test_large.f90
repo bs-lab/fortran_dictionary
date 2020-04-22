@@ -1,48 +1,48 @@
-PROGRAM MAIN_TESTS
+program MAIN_TEST_LARGE
   use dictionary_mod
-  IMPLICIT NONE
-  INTEGER, PARAMETER :: dp=KIND(1d0)
-  INTEGER, PARAMETER :: inn=100, fid=200
-  CHARACTER(LEN=256) :: AllWordsFile, OutputFile
-  CHARACTER(LEN=128) :: Word
-  CHARACTER(LEN=mkl), DIMENSION(:), ALLOCATABLE :: keys
-  CHARACTER(LEN=mlv) :: tempchar
-  TYPE(Dict) :: LargeDict
-  INTEGER :: k, ios
+  implicit none
+  integer, parameter :: dp=kind(1d0)
+  integer, parameter :: inn=100, fid=200
+  character(len=256) :: AllWordsFile, OutputFile
+  character(len=128) :: Word
+  character(len=mkl), dimension(:), allocatable :: keys
+  character(len=mlv) :: tempchar
+  type(Dict) :: LargeDict
+  integer :: k, ios
 
-  CALL GETARG(1, AllWordsFile)
-  CALL GETARG(2, OutputFile)
+  call getarg(1, AllWordsFile)
+  call getarg(2, OutputFile)
 
   write(6,'(/A)') "----------------------------------------------------"
   write(6,'(A)')  "LOTS O' WORDS"
   write(6,'(A)')  "----------------------------------------------------"
   ! read every entry as a key and use that as the value also
-  CALL LargeDict%initialize("")
-  OPEN(UNIT=inn, FILE=AllWordsFile, ACTION='read', STATUS='old')
-  DO
-    READ(inn, *, iostat=ios) word
-    IF (ios < 0) EXIT
+  call LargeDict%initialize("")
+  open(unit=inn, file=AllWordsFile, action='read', status='old')
+  do
+    read(inn, *, iostat=ios) word
+    if (ios < 0) exit
     !write(0,*)"word xxx"//trim(word)//"xxx"
-    CALL LargeDict%add(trim(word), trim(word))
-  END DO
-  CLOSE(inn)
+    call LargeDict%add(trim(word), trim(word))
+  end do
+  close(inn)
 
-  OPEN(UNIT=fid, FILE=OutputFile, STATUS='unknown', ACTION='write')
+  open(unit=fid, file=OutputFile, status='unknown', action='write')
   write(fid,'(/A)') "testing dict%print()..."
-  CALL LargeDict%print(fid)
+  call LargeDict%print(fid)
 
   write(fid,'(/A)') "hash distribution"
-  CALL PrintSummary(LargeDict, fid)
+  call PrintSummary(LargeDict, fid)
 
   write(6,'(/A)') "testing GetKeys..."
   write(fid,'(/A)') "testing GetKeys..."
   keys = LargeDict%get_keys()
-  DO k = 1, SIZE(keys)
-    CALL LargeDict%value(keys(k), tempchar)
-    write(fid,*) "'" // TRIM(keys(k)) // "' :", TRIM(tempchar)
-  END DO
+  do k = 1, size(keys)
+    call LargeDict%value(keys(k), tempchar)
+    write(fid,*) "'" // trim(keys(k)) // "' :", trim(tempchar)
+  end do
 
-  CALL LargeDict%free()
-  CLOSE(fid)
+  call LargeDict%free()
+  close(fid)
 
-END PROGRAM MAIN_TESTS
+end program MAIN_TEST_LARGE
