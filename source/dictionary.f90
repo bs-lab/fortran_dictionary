@@ -2,17 +2,24 @@ MODULE DICTIONARY_MOD
   IMPLICIT NONE
 
   PRIVATE
-  PUBLIC hash_size, mkl, Dict, PrintDict
+  PUBLIC mkl, mlv, Dict
+
+  INTEGER, PARAMETER :: dp=KIND(1d0)
 
   INTEGER, PARAMETER :: hash_size=101
   INTEGER, PARAMETER :: mkl=64         ! max key length
   INTEGER, PARAMETER :: mll=32         ! max size of linked lists
+  INTEGER, PARAMETER :: mlv=4096       ! max length of dictionary value (for char array values)
 
   TYPE Dict
     CHARACTER(LEN=mkl), DIMENSION(hash_size, mll) :: Keys
-    DOUBLE PRECISION, DIMENSION(hash_size, mll) :: Values
+    INTEGER, DIMENSION(hash_size, mll) :: Values_int
+    REAL(dp), DIMENSION(hash_size, mll) :: Values_dble
+    CHARACTER(LEN=mlv), DIMENSION(hash_size, mll) :: Values_char
     INTEGER, DIMENSION(hash_size) :: used
+    INTEGER :: vtype   ! 0: undefined;  1: integer;  2: double precision;  3: char array
   CONTAINS
+    PROCEDURE :: print => PrintDict
     PROCEDURE :: initialize
     PROCEDURE :: get_keys
     PROCEDURE :: value => GetValue
@@ -21,17 +28,42 @@ MODULE DICTIONARY_MOD
 
 CONTAINS
 
-  SUBROUTINE PrintDict(MyDict)
-    TYPE(Dict), INTENT(IN) :: MyDict
-    INTEGER :: i, j
+  SUBROUTINE PrintDict(MyDict, fid_arg)
+    CLASS(Dict), INTENT(IN) :: MyDict
+    INTEGER, OPTIONAL :: fid_arg
+    INTEGER :: i, j, fid
 
-    DO i = 1, hash_size
-      DO j = 1, MyDict%used(i)
-        IF (MyDIct%Keys(i,j) /= "") THEN
-          WRITE(6,*) TRIM(MyDict%Keys(i,j)), " :", MyDict%Values(i,j)
-        END IF
+    IF (PRESENT(fid_arg)) THEN
+      fid = fid_arg
+    ELSE
+      fid = 6
+    END IF
+
+    IF (MyDict%vtype == 1) THEN
+      DO i = 1, hash_size
+        DO j = 1, MyDict%used(i)
+          IF (MyDict%Keys(i,j) /= "") THEN
+            WRITE(fid,*) TRIM(MyDict%Keys(i,j)), " :", MyDict%Values_int(i,j)
+          END IF
+        END DO
       END DO
-    END DO
+    ELSEIF (MyDict%vtype == 2) THEN
+      DO i = 1, hash_size
+        DO j = 1, MyDict%used(i)
+          IF (MyDict%Keys(i,j) /= "") THEN
+            WRITE(fid,*) TRIM(MyDict%Keys(i,j)), " :", MyDict%Values_dble(i,j)
+          END IF
+        END DO
+      END DO
+    ELSEIF (MydIct%vtype == 3) THEN
+      DO i = 1, hash_size
+        DO j = 1, MyDict%used(i)
+          IF (MyDict%Keys(i,j) /= "") THEN
+            WRITE(fid,*) TRIM(MyDict%Keys(i,j)), " :", TRIM(MyDict%Values_char(i,j))
+          END IF
+        END DO
+      END DO
+    END IF
 
   END SUBROUTINE PrintDict
 
@@ -73,13 +105,26 @@ CONTAINS
 
 
   ! ------------------------------------------------------------------------------------------------
-  SUBROUTINE initialize(MyDict)
+  SUBROUTINE initialize(MyDict, kind_val)
     CLASS(Dict) :: MyDict
+    CLASS(*) :: kind_val
     INTEGER :: i
+
+    SELECT TYPE(kind_val)
+    TYPE IS (integer)
+        MyDict%vtype = 1
+      TYPE IS (real(8))
+        MyDict%vtype = 2
+      TYPE IS (character(len=*))
+        MyDict%vtype = 3
+      CLASS DEFAULT
+        MyDict%vtype = 0
+    END SELECT
 
     DO i = 1, hash_size
       MyDict%Keys(i,:) = ""
-      MyDict%Values(i,:) = TINY(0d0)
+      MyDict%Values_dble(i,:) = TINY(0d0)
+      MyDict%Values_int(i,:) = 0
       MyDict%used(i) = 0
     END DO
 
@@ -110,10 +155,10 @@ CONTAINS
 
 
   ! ------------------------------------------------------------------------------------------------
-  FUNCTION GetValue(MyDict, xKey) RESULT(xValue)
+  SUBROUTINE GetValue(MyDict, xKey, xValue)
     CLASS(Dict), INTENT(IN) :: MyDict
+    CLASS(*) :: xValue
     CHARACTER(LEN=*), INTENT(IN) :: xKey
-    DOUBLE PRECISION :: xValue
     INTEGER :: hash, indx 
 
     hash = GetHash(xKey)
@@ -123,17 +168,37 @@ CONTAINS
       WRITE(0,'(I10)') "traceback"
       STOP
     END IF
-    xValue = MyDict%Values(hash, indx)
+    SELECT TYPE(xValue)
+      TYPE IS (integer)
+        xValue = MyDict%Values_int(hash, indx)
+      TYPE IS (real(dp))
+        xValue = MyDict%Values_dble(hash, indx)
+      TYPE IS (character(len=*))
+        xValue = MyDict%Values_char(hash, indx)
+      CLASS DEFAULT
+    END SELECT
 
-  END FUNCTION GetValue
+  END SUBROUTINE GetValue
 
 
   ! ------------------------------------------------------------------------------------------------
   SUBROUTINE AddToDict(MyDict, xKey, xValue)
     CLASS(Dict), INTENT(INOUT) :: MyDict
+    CLASS(*), INTENT(IN) :: xValue
     CHARACTER(LEN=*), INTENT(IN) :: xKey
-    DOUBLE PRECISION, INTENT(IN) :: xValue
-    INTEGER :: hash, indx
+    INTEGER :: hash, indx, xValue_int
+    CHARACTER(LEN=mlv) :: xValue_char
+    REAL(dp) :: xValue_dble
+
+    SELECT TYPE(xValue)
+      TYPE IS (integer)
+        xValue_int = xValue
+      TYPE IS (real(dp))
+        xValue_dble = xValue
+      TYPE IS (character(len=*))
+        xValue_char = xValue
+      CLASS DEFAULT
+    END SELECT
 
     hash = GetHash(xKey)
 
@@ -165,7 +230,13 @@ CONTAINS
 
     !write(0,*)"used, key, value:", MyDict%used(hash), indx, xKey, xValue
     MyDict%Keys(hash, indx) = xKey
-    MyDict%Values(hash, indx) = xValue
+    IF (MyDict%vtype == 1) THEN
+      MyDict%Values_int(hash, indx) = xValue_int
+    ELSEIF (MyDict%vtype == 2) THEN
+      MyDict%Values_dble(hash, indx) = xValue_dble
+    ELSEIF (MyDict%vtype == 3) THEN
+      MyDict%Values_char(hash, indx) = xValue_char
+    END IF
 
   END SUBROUTINE AddToDict
 
