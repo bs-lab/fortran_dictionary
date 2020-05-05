@@ -13,7 +13,7 @@ module dictionary_mod
   integer, parameter :: mlv=4096       ! max length of dictionary value (for char array values)
 
   type Dict
-    character(len=mkl), dimension(hash_size, mll) :: Keys
+    character(len=mkl), dimension(mll, hash_size) :: Keys
     integer, dimension(:, :), allocatable :: Values_int
     real(dp), dimension(:, :), allocatable :: Values_dble
     character(len=mlv), dimension(:, :), allocatable :: Values_char
@@ -52,24 +52,24 @@ contains
     end if
 
     if (MyDict%vtype == 1) then
-      do i = 1, hash_size
-        do j = 1, MyDict%used(i)
+      do j = 1, hash_size
+        do i = 1, MyDict%used(j)
           if (MyDict%Keys(i,j) /= "") then
             write(fid,*) trim(MyDict%Keys(i,j)), " :", MyDict%Values_int(i,j)
           end if
         end do
       end do
     elseif (MyDict%vtype == 2) then
-      do i = 1, hash_size
-        do j = 1, MyDict%used(i)
+      do j = 1, hash_size
+        do i = 1, MyDict%used(j)
           if (MyDict%Keys(i,j) /= "") then
             write(fid,*) trim(MyDict%Keys(i,j)), " :", MyDict%Values_dble(i,j)
           end if
         end do
       end do
     elseif (MydIct%vtype == 3) then
-      do i = 1, hash_size
-        do j = 1, MyDict%used(i)
+      do j = 1, hash_size
+        do i = 1, MyDict%used(j)
           if (MyDict%Keys(i,j) /= "") then
             write(fid,*) trim(MyDict%Keys(i,j)), " :", trim(MyDict%Values_char(i,j))
           end if
@@ -112,7 +112,7 @@ contains
 
     indx = 0
     do u = 1, MyDict%used(hash)
-      if (xKey == MyDict%Keys(hash, u)) then
+      if (xKey == MyDict%Keys(u, hash)) then
         !write(0,*) "going to overwrite at u=", u
         ! key already exists, so will overwrite its existing corresponding value
         indx = u
@@ -132,22 +132,22 @@ contains
     select type(kind_val)
     type is (integer)
         MyDict%vtype = 1
-        allocate(MyDict%Values_int(hash_size, mll))
+        allocate(MyDict%Values_int(mll, hash_size))
         !MyDict%Values_int(:,:) = 0
       type is (real(8))
         MyDict%vtype = 2
-        allocate(MyDict%Values_dble(hash_size, mll))
+        allocate(MyDict%Values_dble(mll, hash_size))
         MyDict%Values_dble(:,:) = tiny(0d0)
       type is (character(len=*))
         MyDict%vtype = 3
-        allocate(MyDict%Values_char(hash_size, mll))
+        allocate(MyDict%Values_char(mll, hash_size))
         !MyDict%Values_char(:,:) = ""
       class default
         MyDict%vtype = 0
     end select
 
     do i = 1, hash_size
-      MyDict%Keys(i,:) = ""
+      MyDict%Keys(:, i) = ""
       MyDict%used(i) = 0
     end do
 
@@ -176,8 +176,8 @@ contains
 
     c = 0
     allocate(keys_sparse(hash_size*mll))
-    do i = 1, hash_size
-      do j = 1, MyDict%used(i)
+    do j = 1, hash_size
+      do i = 1, MyDict%used(j)
         if (MyDict%Keys(i,j) /= "") then
           c = c + 1
           keys_sparse(c) = MyDict%Keys(i,j)
@@ -208,11 +208,11 @@ contains
 
     select typE(xValue)
       type is (integer)
-        xValue = MyDict%Values_int(hash, indx)
+        xValue = MyDict%Values_int(indx, hash)
       type is (real(dp))
-        xValue = MyDict%Values_dble(hash, indx)
+        xValue = MyDict%Values_dble(indx, hash)
       type is (character(len=*))
-        xValue = MyDict%Values_char(hash, indx)
+        xValue = MyDict%Values_char(indx, hash)
       class default
     end select
 
@@ -267,13 +267,13 @@ contains
     end if
 
     !write(0,*)"used, key, value:", MyDict%used(hash), indx, xKey, xValue
-    MyDict%Keys(hash, indx) = xKey
+    MyDict%Keys(indx, hash) = xKey
     if (MyDict%vtype == 1) then
-      MyDict%Values_int(hash, indx) = xValue_int
+      MyDict%Values_int(indx, hash) = xValue_int
     elseif (MyDict%vtype == 2) then
-      MyDict%Values_dble(hash, indx) = xValue_dble
+      MyDict%Values_dble(indx, hash) = xValue_dble
     elseif (MyDict%vtype == 3) then
-      MyDict%Values_char(hash, indx) = xValue_char
+      MyDict%Values_char(indx, hash) = xValue_char
     end if
 
   end subroutine AddToDict
